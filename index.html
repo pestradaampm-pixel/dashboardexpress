@@ -101,7 +101,7 @@
         .active-filter-badge.show { display: flex; }
 
         /* ÁREA PRINCIPAL */
-        .main-content { margin-left: var(--sidebar-width); flex: 1; padding: 25px 35px; background-color: var(--bg-primary); }
+        .main-content { margin-left: var(--sidebar-width); flex: 1; padding: 25px 35px; background-color: var(--bg-primary); position: relative; }
 
         .file-info-tag {
             display: inline-flex; background-color: #e2e8f0; padding: 6px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; color: #4a5568; margin-bottom: 20px; align-items: center; gap: 8px; width: fit-content;
@@ -200,6 +200,9 @@
     </div>
 
     <div class="main-content">
+        <!-- Leyenda en la esquina superior derecha -->
+        <div style="position: absolute; top: 25px; right: 35px; font-size: 0.85rem; color: var(--text-muted); font-weight: 600; z-index: 5;">Designed by Pedro Estrada</div>
+
         <div id="alertContainer"></div>
 
         <div class="file-info-tag" id="fileInfo">
