@@ -41,6 +41,30 @@
             --kpi-purple: #f3e8ff; --kpi-purple-txt: #6b21a8;
         }
 
+        body.dark-mode {
+            --bg-primary: #111827;
+            --text-main: #e5e7eb;
+            --text-muted: #9ca3af;
+            --border-color: #374151;
+        }
+        body.dark-mode .sidebar,
+        body.dark-mode .chart-wrapper,
+        body.dark-mode .table-wrapper,
+        body.dark-mode .kpi-card { background-color: #1f2937; }
+        body.dark-mode .sidebar h2,
+        body.dark-mode .data-status-container p,
+        body.dark-mode .chart-wrapper h3,
+        body.dark-mode .table-header-tools h3,
+        body.dark-mode .kpi-card .kpi-value { color: #f9fafb; }
+        body.dark-mode .data-status-container,
+        body.dark-mode .table-header-tools,
+        body.dark-mode th { background-color: #111827; }
+        body.dark-mode .filter-group select,
+        body.dark-mode .filter-group input { background-color: #111827; color: #f9fafb; }
+        body.dark-mode td { color: #e5e7eb; }
+        body.dark-mode tr:hover td { background-color: #263244; }
+        body.dark-mode .btn-secondary { background-color: #374151; color: #f9fafb; }
+
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         body { background-color: var(--bg-primary); color: var(--text-main); display: flex; min-height: 100vh; }
 
@@ -166,11 +190,21 @@
     <div class="sidebar">
         <img src="image_dbb586.png" alt="Logotipo u Operación" class="sidebar-top-img">
 
+        <div>
+            <button class="btn btn-secondary" id="darkModeBtn" onclick="toggleDarkMode()"><i class="fas fa-moon"></i> Modo oscuro</button>
+        </div>
+
         <h2><i class="fas fa-folder-open" style="color: #ffc107;"></i> Historial Mensual</h2>
         
         <div class="filter-group">
-            <label style="color: var(--accent-color); font-weight: bold;">Meses Disponibles Localmente:</label>
-            <select id="selectMonthFile" onchange="processSelectedMonth()" style="border: 2px solid var(--accent-color); font-weight: bold;">
+            <label style="color: var(--accent-color); font-weight: bold;">Mes inicial:</label>
+            <select id="selectMonthStart" onchange="processSelectedMonths()" style="border: 2px solid var(--accent-color); font-weight: bold;">
+                <option value="">-- Buscando archivos... --</option>
+            </select>
+        </div>
+        <div class="filter-group">
+            <label style="color: var(--accent-color); font-weight: bold;">Mes final:</label>
+            <select id="selectMonthEnd" onchange="processSelectedMonths()" style="border: 2px solid var(--accent-color); font-weight: bold;">
                 <option value="">-- Buscando archivos... --</option>
             </select>
         </div>
@@ -193,10 +227,8 @@
 
         <div class="filter-group"><label>Agente</label><select id="filterAgent" onchange="applyFilters()"><option value="">Ninguno</option></select></div>
         <div class="filter-group"><label>Cola / Skill</label><select id="filterQueue" onchange="applyFilters()"><option value="">Ninguno</option></select></div>
-        <div class="filter-group"><label>Tipo Dirección</label><select id="filterType" onchange="applyFilters()"><option value="">Ninguno</option></select></div>
         <div class="filter-group"><label>Estado Disposición</label><select id="filterStatus" onchange="applyFilters()"><option value="">Ninguno</option></select></div>
 
-        <button class="btn btn-secondary" onclick="resetFilters()"><i class="fas fa-undo"></i> Restablecer</button>
     </div>
 
     <div class="main-content">
@@ -265,7 +297,7 @@
                     <div class="chart-container"><canvas id="durationDistributionChart"></canvas></div>
                 </div>
                 <div class="chart-wrapper" style="grid-column: span 2; height: 320px;">
-                    <h3><i class="fas fa-align-left" style="color: #17a2b8;"></i> Distribución por Status (Clic filtra Status)</h3>
+                    <h3><i class="fas fa-align-left" style="color: #17a2b8;"></i> Llamadas por Semana: Atendidas vs Abandonadas</h3>
                     <div class="chart-container"><canvas id="statusChart"></canvas></div>
                 </div>
             </div>
@@ -321,56 +353,75 @@
 
         // AL ARRANCAR, DETECTA SOLO LOS MESES QUE SÍ RESPONDIERON
         window.addEventListener('load', () => {
-            const select = document.getElementById('selectMonthFile');
-            select.innerHTML = '';
+            if (localStorage.getItem('dashboardDarkMode') === '1') {
+                document.body.classList.add('dark-mode');
+                const btn = document.getElementById('darkModeBtn');
+                if (btn) btn.innerHTML = '<i class="fas fa-sun"></i> Modo claro';
+            }
 
+            const selectStart = document.getElementById('selectMonthStart');
+            const selectEnd = document.getElementById('selectMonthEnd');
             const delaNube = window.MisMesesDisponibles || {};
-            const mesesEncontrados = Object.keys(delaNube);
+            const mesesEncontrados = MESES_ORDENADOS.filter(mes => Object.prototype.hasOwnProperty.call(delaNube, mes));
 
             if (mesesEncontrados.length === 0) {
-                select.innerHTML = '<option value="">❌ Ningún archivo .js hallado</option>';
+                selectStart.innerHTML = '<option value="">❌ Ningún archivo .js hallado</option>';
+                selectEnd.innerHTML = '<option value="">❌ Ningún archivo .js hallado</option>';
                 document.getElementById('fileInfoTxt').innerText = "Pon al menos un archivo mensual (ej. 'datos_enero.js') en la misma carpeta.";
                 return;
             }
 
-            // Ordenar los meses cronológicamente si hay varios
-            select.innerHTML = '<option value="">-- Elige un Mes --</option>';
-            MESES_ORDENADOS.forEach(mes => {
-                if(mesesEncontrados.includes(mes)) {
-                    select.innerHTML += `<option value="${mes}">${mes}</option>`;
-                }
-            });
+            const options = mesesEncontrados.map(mes => `<option value="${mes}">${mes}</option>`).join('');
+            selectStart.innerHTML = options;
+            selectEnd.innerHTML = options;
 
-            // Si solo hay un mes disponible, cargarlo en automático para ahorrar clics
-            if(mesesEncontrados.length === 1) {
-                select.value = mesesEncontrados[0];
-                processSelectedMonth();
-            }
+            // Carga por defecto el rango completo disponible.
+            selectStart.value = mesesEncontrados[0];
+            selectEnd.value = mesesEncontrados[mesesEncontrados.length - 1];
+            processSelectedMonths();
         });
 
-        function processSelectedMonth() {
-            const select = document.getElementById('selectMonthFile');
-            const mesSeleccionado = select.value;
-            if(!mesSeleccionado) return;
+        function processSelectedMonths() {
+            const selectStart = document.getElementById('selectMonthStart');
+            const selectEnd = document.getElementById('selectMonthEnd');
+            const mesInicio = selectStart.value;
+            const mesFin = selectEnd.value;
+            if (!mesInicio || !mesFin) return;
+
+            const inicioIndex = MESES_ORDENADOS.indexOf(mesInicio);
+            const finIndex = MESES_ORDENADOS.indexOf(mesFin);
+            if (inicioIndex > finIndex) {
+                document.getElementById('fileInfoTxt').innerText = 'El mes inicial no puede ser posterior al mes final.';
+                return;
+            }
+
+            const mesesSeleccionados = MESES_ORDENADOS.slice(inicioIndex, finIndex + 1)
+                .filter(mes => window.MisMesesDisponibles && window.MisMesesDisponibles[mes]);
+            if (mesesSeleccionados.length === 0) return;
 
             document.getElementById('loading').classList.add('active');
-            const csvData = window.MisMesesDisponibles[mesSeleccionado];
+            try {
+                const filasCombinadas = [];
+                mesesSeleccionados.forEach(mes => {
+                    const csvData = window.MisMesesDisponibles[mes];
+                    const results = Papa.parse(csvData.trim(), { header: true, skipEmptyLines: true });
+                    filasCombinadas.push(...results.data);
+                });
 
-            Papa.parse(csvData.trim(), {
-                header: true,
-                skipEmptyLines: true,
-                complete: function(results) {
-                    rawData = normalizeData(results.data);
-                    initFilters();
-                    graphFilters = { cola: null, agente: null, resolución: null, estado: null };
-                    applyFilters();
-                    
-                    document.getElementById('lblOrígen').innerText = `Origen: datos_${mesSeleccionado.toLowerCase()}.js`;
-                    document.getElementById('lblStatusLectura').innerText = `Mapeo Offline Exitoso`;
-                    document.getElementById('fileInfoTxt').innerText = `${rawData.length} llamadas procesadas en el mes de ${mesSeleccionado} (8am - 8pm).`;
-                    document.getElementById('loading').classList.remove('active');
-                }
-            });
+                rawData = normalizeData(filasCombinadas);
+                initFilters();
+                graphFilters = { cola: null, agente: null, resolución: null, estado: null };
+                applyFilters();
+
+                const rangoTexto = mesesSeleccionados.length === 1
+                    ? mesesSeleccionados[0]
+                    : `${mesesSeleccionados[0]} a ${mesesSeleccionados[mesesSeleccionados.length - 1]}`;
+                document.getElementById('lblOrígen').innerText = `Origen: ${mesesSeleccionados.length} archivo(s) mensual(es)`;
+                document.getElementById('lblStatusLectura').innerText = 'Mapeo Offline Exitoso';
+                document.getElementById('fileInfoTxt').innerText = `${rawData.length} llamadas procesadas del rango ${rangoTexto} (8am - 8pm).`;
+            } finally {
+                document.getElementById('loading').classList.remove('active');
+            }
         }
 
         function getQueueName(code) {
@@ -421,7 +472,6 @@
             const unique = (key) => [...new Set(rawData.map(item => item[key]))].sort();
             populateSelect('filterAgent', unique('agente'), "Todos los Agentes");
             populateSelect('filterQueue', unique('cola'), "Todas las Colas");
-            populateSelect('filterType', unique('tipo'), "Todos los Tipos");
             populateSelect('filterStatus', unique('estado'), "Todos los Estados");
 
             const dates = rawData.map(item => item.fechaObj.getTime());
@@ -447,7 +497,6 @@
             
             const agent = document.getElementById('filterAgent').value;
             const queue = document.getElementById('filterQueue').value;
-            const type = document.getElementById('filterType').value;
             const status = document.getElementById('filterStatus').value;
 
             filteredData = rawData.filter(item => {
@@ -456,7 +505,6 @@
                 
                 if (agent && item.agente !== agent) return false;
                 if (queue && item.cola !== queue) return false;
-                if (type && item.tipo !== type) return false;
                 if (status && item.estado !== status) return false;
 
                 if (graphFilters.cola && item.cola !== graphFilters.cola) return false;
@@ -485,16 +533,6 @@
 
         function clearChartCrossFilter() {
             graphFilters = { cola: null, agente: null, resolución: null, estado: null };
-            applyFilters();
-        }
-
-        function resetFilters() {
-            graphFilters = { cola: null, agente: null, resolución: null, estado: null };
-            document.getElementById('filterAgent').value = "";
-            document.getElementById('filterQueue').value = "";
-            document.getElementById('filterType').value = "";
-            document.getElementById('filterStatus').value = "";
-            initFilters();
             applyFilters();
         }
 
@@ -569,6 +607,49 @@
             }
         }
 
+        const percentageLabelsPlugin = {
+            id: 'percentageLabels',
+            afterDatasetsDraw(chart) {
+                if (chart.canvas.id !== 'queueDistributionChart') return;
+                const {ctx, data} = chart;
+                const values = data.datasets[0].data || [];
+                const total = values.reduce((a,b) => a + Number(b || 0), 0);
+                if (!total) return;
+                ctx.save();
+                ctx.font = '600 11px Segoe UI';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                chart.getDatasetMeta(0).data.forEach((arc, i) => {
+                    const pct = ((values[i] / total) * 100).toFixed(1) + '%';
+                    const pos = arc.tooltipPosition();
+                    ctx.fillStyle = document.body.classList.contains('dark-mode') ? '#ffffff' : '#1f2937';
+                    ctx.fillText(pct, pos.x, pos.y);
+                });
+                ctx.restore();
+            }
+        };
+        Chart.register(percentageLabelsPlugin);
+
+        function toggleDarkMode() {
+            document.body.classList.toggle('dark-mode');
+            const dark = document.body.classList.contains('dark-mode');
+            localStorage.setItem('dashboardDarkMode', dark ? '1' : '0');
+            const btn = document.getElementById('darkModeBtn');
+            btn.innerHTML = dark ? '<i class="fas fa-sun"></i> Modo claro' : '<i class="fas fa-moon"></i> Modo oscuro';
+            Object.values(charts).forEach(chart => chart.update());
+        }
+
+        function getWeekKey(date) {
+            const d = new Date(date);
+            d.setHours(0,0,0,0);
+            const day = (d.getDay() + 6) % 7;
+            d.setDate(d.getDate() - day);
+            const yearStart = new Date(d.getFullYear(), 0, 1);
+            const diffDays = Math.floor((d - yearStart) / 86400000);
+            const week = Math.floor((diffDays + ((yearStart.getDay()+6)%7)) / 7) + 1;
+            return `${d.getFullYear()}-S${String(week).padStart(2,'0')}`;
+        }
+
 		function renderCharts() {
             // 1. Comportamiento y Tendencia Temporal
             const trendGroup = {};
@@ -639,7 +720,14 @@
                     options: { 
                         responsive: true, maintainAspectRatio: false, 
                         layout: { padding: { top: 10, bottom: 10, left: 5, right: 15 } },
-                        plugins: { legend: { position: 'right', align: 'center', labels: { boxWidth: 12, font: { size: 10 } } } },
+                        plugins: {
+                            legend: { position: 'right', align: 'center', labels: { boxWidth: 12, font: { size: 10 } } },
+                            tooltip: { callbacks: { label: (ctx) => {
+                                const total = ctx.dataset.data.reduce((a,b) => a + Number(b || 0), 0);
+                                const pct = total > 0 ? ((ctx.raw / total) * 100).toFixed(1) : 0;
+                                return ` ${ctx.label}: ${ctx.raw} (${pct}%)`;
+                            } } }
+                        },
                         onClick: (e, el) => handleChartClick(e, el, charts['queue'], 'cola') 
                     }
                 });
@@ -706,18 +794,40 @@
                 });
             }
 
-            // 8. Distribución por Status
-            const statusGroup = {};
-            filteredData.forEach(d => statusGroup[d.estado] = (statusGroup[d.estado] || 0) + 1);
-            
+            // 8. Llamadas por Semana: Atendidas vs Abandonadas
+            const weeklyGroup = {};
+            filteredData.forEach(d => {
+                const week = getWeekKey(d.fechaObj);
+                if (!weeklyGroup[week]) weeklyGroup[week] = { atendidas: 0, abandonadas: 0 };
+                const esAtendida = ['atendido', 'atendida', 'answered', 'success'].includes(d.estado.toLowerCase().trim());
+                if (esAtendida) weeklyGroup[week].atendidas++;
+                else weeklyGroup[week].abandonadas++;
+            });
+            const weekLabels = Object.keys(weeklyGroup).sort();
+            const weeklyAnswered = weekLabels.map(w => weeklyGroup[w].atendidas);
+            const weeklyAbandoned = weekLabels.map(w => weeklyGroup[w].abandonadas);
+
             if (charts['status']) {
-                charts['status'].data.labels = Object.keys(statusGroup);
-                charts['status'].data.datasets[0].data = Object.values(statusGroup);
+                charts['status'].data.labels = weekLabels;
+                charts['status'].data.datasets[0].data = weeklyAnswered;
+                charts['status'].data.datasets[1].data = weeklyAbandoned;
                 charts['status'].update();
             } else {
                 charts['status'] = new Chart(document.getElementById('statusChart'), {
-                    type: 'bar', data: { labels: Object.keys(statusGroup), datasets: [{ label: 'Status', data: Object.values(statusGroup), backgroundColor: '#9467bd' }] },
-                    options: { responsive: true, maintainAspectRatio: false, onClick: (e, el) => handleChartClick(e, el, charts['status'], 'estado') }
+                    type: 'line',
+                    data: {
+                        labels: weekLabels,
+                        datasets: [
+                            { label: 'Llamadas atendidas', data: weeklyAnswered, borderColor: '#2ea861', backgroundColor: 'rgba(46,168,97,0.15)', tension: 0.25, fill: false },
+                            { label: 'Llamadas abandonadas', data: weeklyAbandoned, borderColor: '#e53e3e', backgroundColor: 'rgba(229,62,62,0.15)', tension: 0.25, fill: false }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        interaction: { mode: 'index', intersect: false },
+                        scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+                    }
                 });
             }
         }
