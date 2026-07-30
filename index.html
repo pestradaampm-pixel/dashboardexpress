@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard Contact Center Express </title>
+    <title>Dashboard Operativo - Contact Center Interactivo</title>
     
     <link rel="icon" type="image/png" href="image_db504a.png">
     
@@ -52,11 +52,9 @@
         body.dark-mode .table-wrapper,
         body.dark-mode .kpi-card { background-color: #1f2937; }
         body.dark-mode .sidebar h2,
-        body.dark-mode .data-status-container p,
         body.dark-mode .chart-wrapper h3,
         body.dark-mode .table-header-tools h3,
         body.dark-mode .kpi-card .kpi-value { color: #f9fafb; }
-        body.dark-mode .data-status-container,
         body.dark-mode .table-header-tools,
         body.dark-mode th { background-color: #111827; }
         body.dark-mode .filter-group select,
@@ -94,17 +92,6 @@
 
         .sidebar h2 { font-size: 1.1rem; color: #1a202c; display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
         
-        .data-status-container {
-            background-color: #f8fafc;
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 12px 10px;
-            text-align: center;
-        }
-        .data-status-container i { font-size: 1.3rem; color: var(--accent-color); margin-bottom: 4px; }
-        .data-status-container p { font-size: 0.8rem; font-weight: 600; color: #1a202c; }
-        .data-status-container span { font-size: 0.7rem; color: var(--text-muted); display: block; margin-top: 2px; }
-
         .filter-group { display: flex; flex-direction: column; gap: 4px; }
         .filter-group label { font-size: 0.8rem; font-weight: 600; color: #4a5568; }
         .filter-group select, .filter-group input {
@@ -130,6 +117,23 @@
         .file-info-tag {
             display: inline-flex; background-color: #e2e8f0; padding: 6px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; color: #4a5568; margin-bottom: 20px; align-items: center; gap: 8px; width: fit-content;
         }
+
+        .dashboard-footer-status {
+            margin-top: 8px;
+            padding: 14px 16px 4px;
+            border-top: 1px solid var(--border-color);
+            color: var(--text-muted);
+            font-size: 0.78rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            text-align: center;
+        }
+        .dashboard-footer-status i { color: var(--accent-color); }
+        .dashboard-footer-status .footer-separator { opacity: 0.55; }
+        body.dark-mode .dashboard-footer-status { color: #cbd5e1; }
 
         .view-selector { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid var(--border-color); padding-bottom: 8px; }
         .view-tab { padding: 8px 16px; cursor: pointer; font-weight: 600; color: var(--text-muted); border-radius: 6px; font-size: 0.9rem; transition: all 0.2s; }
@@ -222,18 +226,15 @@
             </select>
         </div>
 
-        <div class="data-status-container">
-            <i class="fas fa-database"></i>
-            <p id="lblOrígen">Origen: Ninguno</p>
-            <span id="lblStatusLectura">Sin datos seleccionados</span>
-        </div>
-
         <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 5px 0;">
         <h2><i class="fas fa-filter" style="color: var(--accent-color);"></i> Filtros de Control</h2>
         
         <div class="filter-group"><label>Fecha Inicio</label><input type="date" id="dateStart"></div>
         <div class="filter-group"><label>Fecha Fin</label><input type="date" id="dateEnd"></div>
         <button class="btn btn-primary" onclick="applyFilters()" style="padding: 6px; font-size: 0.8rem; margin-bottom: 5px;"><i class="fas fa-calendar-check"></i> Aplicar Fechas</button>
+        <button class="btn btn-secondary" onclick="clearAllFilters()" style="padding: 6px; font-size: 0.8rem; margin-bottom: 5px;">
+            <i class="fas fa-filter-circle-xmark"></i> Limpiar filtros
+        </button>
         
         <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 5px 0;">
         <p style="font-size:0.75rem; color:var(--text-muted); font-weight:bold; padding-left:2px; margin-bottom:-5px;"><i class="fas fa-clock"></i> Horario: 8:00 AM - 8:00 PM Activo</p>
@@ -384,6 +385,13 @@
                     </tbody>
                 </table>
             </div>
+        </div>
+
+        <div class="dashboard-footer-status" id="dashboardDataStatus">
+            <i class="fas fa-database"></i>
+            <span id="lblOrígen">Origen: Ninguno</span>
+            <span class="footer-separator">•</span>
+            <span id="lblStatusLectura">Sin datos seleccionados</span>
         </div>
     </div>
 
@@ -599,6 +607,24 @@
             applyFilters();
         }
 
+        function clearAllFilters() {
+            document.getElementById('filterAgent').value = '';
+            document.getElementById('filterQueue').value = '';
+            document.getElementById('filterStatus').value = '';
+
+            const dates = rawData.map(item => item.fechaObj.getTime()).filter(Number.isFinite);
+            if (dates.length > 0) {
+                document.getElementById('dateStart').value = new Date(Math.min(...dates)).toLocaleDateString('sv-SE');
+                document.getElementById('dateEnd').value = new Date(Math.max(...dates)).toLocaleDateString('sv-SE');
+            } else {
+                document.getElementById('dateStart').value = '';
+                document.getElementById('dateEnd').value = '';
+            }
+
+            graphFilters = { cola: null, agente: null, resolución: null, estado: null };
+            applyFilters();
+        }
+
         function switchView(viewName) {
             document.querySelectorAll('.dashboard-view').forEach(v => v.style.display = 'none');
             document.querySelectorAll('.view-tab').forEach(t => t.classList.remove('active'));
@@ -670,28 +696,85 @@
             }
         }
 
-        const percentageLabelsPlugin = {
-            id: 'percentageLabels',
+        const visibleDataLabelsPlugin = {
+            id: 'visibleDataLabels',
             afterDatasetsDraw(chart) {
-                if (chart.canvas.id !== 'queueDistributionChart') return;
-                const {ctx, data} = chart;
-                const values = data.datasets[0].data || [];
-                const total = values.reduce((a,b) => a + Number(b || 0), 0);
-                if (!total) return;
+                const { ctx, data, chartArea } = chart;
+                if (!chartArea) return;
+
+                const chartType = chart.config.type;
+                const isCircular = chartType === 'pie' || chartType === 'doughnut';
+                const darkMode = document.body.classList.contains('dark-mode');
+
                 ctx.save();
-                ctx.font = '600 11px Segoe UI';
-                ctx.textAlign = 'center';
+                ctx.font = '600 10px Segoe UI';
                 ctx.textBaseline = 'middle';
-                chart.getDatasetMeta(0).data.forEach((arc, i) => {
-                    const pct = ((values[i] / total) * 100).toFixed(1) + '%';
-                    const pos = arc.tooltipPosition();
-                    ctx.fillStyle = document.body.classList.contains('dark-mode') ? '#ffffff' : '#1f2937';
-                    ctx.fillText(pct, pos.x, pos.y);
+                ctx.lineJoin = 'round';
+                ctx.lineWidth = 3;
+
+                data.datasets.forEach((dataset, datasetIndex) => {
+                    const meta = chart.getDatasetMeta(datasetIndex);
+                    if (meta.hidden || !meta.data) return;
+
+                    const values = dataset.data || [];
+                    const datasetTotal = values.reduce((sum, value) => sum + (Number(value) || 0), 0);
+
+                    meta.data.forEach((element, index) => {
+                        const rawValue = Number(values[index]);
+                        if (!Number.isFinite(rawValue) || rawValue === 0) return;
+
+                        let label = rawValue.toLocaleString('es-MX', { maximumFractionDigits: 1 });
+                        let x = 0;
+                        let y = 0;
+
+                        if (isCircular) {
+                            const percentage = datasetTotal > 0 ? (rawValue / datasetTotal) * 100 : 0;
+                            label = `${percentage.toFixed(1)}%`;
+                            const position = element.tooltipPosition();
+                            x = position.x;
+                            y = position.y;
+                            ctx.textAlign = 'center';
+                            ctx.strokeStyle = 'rgba(17, 24, 39, 0.85)';
+                            ctx.fillStyle = '#ffffff';
+                        } else {
+                            const props = element.getProps
+                                ? element.getProps(['x', 'y', 'base'], true)
+                                : element;
+                            const indexAxis = chart.options.indexAxis || 'x';
+
+                            ctx.strokeStyle = darkMode ? '#111827' : '#ffffff';
+                            ctx.fillStyle = darkMode ? '#ffffff' : '#1f2937';
+
+                            if (chartType === 'bar' && indexAxis === 'y') {
+                                y = props.y;
+                                if (props.x > chartArea.right - 38) {
+                                    x = props.x - 6;
+                                    ctx.textAlign = 'right';
+                                } else {
+                                    x = props.x + 6;
+                                    ctx.textAlign = 'left';
+                                }
+                            } else if (chartType === 'bar') {
+                                x = props.x;
+                                y = Math.max(props.y - 9, chartArea.top + 8);
+                                ctx.textAlign = 'center';
+                            } else {
+                                const offset = datasetIndex % 2 === 0 ? -10 : 12;
+                                x = props.x;
+                                y = Math.min(Math.max(props.y + offset, chartArea.top + 8), chartArea.bottom - 8);
+                                ctx.textAlign = 'center';
+                            }
+                        }
+
+                        ctx.strokeText(label, x, y);
+                        ctx.fillText(label, x, y);
+                    });
                 });
+
                 ctx.restore();
             }
         };
-        Chart.register(percentageLabelsPlugin);
+        Chart.register(visibleDataLabelsPlugin);
 
         function toggleDarkMode() {
             document.body.classList.toggle('dark-mode');
@@ -714,19 +797,57 @@
         }
 
 		function renderCharts() {
-            // 1. Comportamiento y Tendencia Temporal
+            // 1. Comportamiento y Tendencia Temporal: Atendidas vs Abandonadas
             const trendGroup = {};
-            filteredData.forEach(d => { const day = d.fechaObj.toLocaleDateString('sv-SE'); trendGroup[day] = (trendGroup[day] || 0) + 1; });
+            filteredData.forEach(d => {
+                const day = d.fechaObj.toLocaleDateString('sv-SE');
+                if (!trendGroup[day]) trendGroup[day] = { atendidas: 0, abandonadas: 0 };
+
+                const esAtendida = ['atendido', 'atendida', 'answered', 'success'].includes(d.estado.toLowerCase().trim());
+                if (esAtendida) trendGroup[day].atendidas++;
+                else trendGroup[day].abandonadas++;
+            });
             const sortedDays = Object.keys(trendGroup).sort();
+            const trendAnswered = sortedDays.map(day => trendGroup[day].atendidas);
+            const trendAbandoned = sortedDays.map(day => trendGroup[day].abandonadas);
             
             if (charts['trend']) {
                 charts['trend'].data.labels = sortedDays;
-                charts['trend'].data.datasets[0].data = sortedDays.map(d => trendGroup[d]);
+                charts['trend'].data.datasets[0].data = trendAnswered;
+                charts['trend'].data.datasets[1].data = trendAbandoned;
                 charts['trend'].update();
             } else {
                 charts['trend'] = new Chart(document.getElementById('trendChart'), {
-                    type: 'line', data: { labels: sortedDays, datasets: [{ label: 'Llamadas', data: sortedDays.map(d => trendGroup[d]), borderColor: '#1f77b4', tension: 0.1, fill: false }] },
-                    options: { responsive: true, maintainAspectRatio: false }
+                    type: 'line',
+                    data: {
+                        labels: sortedDays,
+                        datasets: [
+                            {
+                                label: 'Atendidas',
+                                data: trendAnswered,
+                                borderColor: '#2ea861',
+                                backgroundColor: 'rgba(46,168,97,0.12)',
+                                tension: 0.25,
+                                pointRadius: 2,
+                                fill: false
+                            },
+                            {
+                                label: 'Abandonadas',
+                                data: trendAbandoned,
+                                borderColor: '#e53e3e',
+                                backgroundColor: 'rgba(229,62,62,0.12)',
+                                tension: 0.25,
+                                pointRadius: 2,
+                                fill: false
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        interaction: { mode: 'index', intersect: false },
+                        scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+                    }
                 });
             }
 
