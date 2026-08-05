@@ -9,6 +9,7 @@
     
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <script src="datos_enero.js" defer></script>
@@ -114,8 +115,31 @@
         /* ÁREA PRINCIPAL */
         .main-content { margin-left: var(--sidebar-width); flex: 1; padding: 25px 35px; background-color: var(--bg-primary); position: relative; }
 
+        .dashboard-header-brand {
+            display: flex;
+            align-items: center;
+            gap: 18px;
+            margin-bottom: 18px;
+            padding-right: 190px;
+        }
+        .dashboard-main-title {
+            margin: 0;
+            font-size: 2rem;
+            line-height: 1.15;
+            color: #0b1f4d;
+            font-weight: 800;
+        }
         .file-info-tag {
-            display: inline-flex; background-color: #e2e8f0; padding: 6px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; color: #4a5568; margin-bottom: 20px; align-items: center; gap: 8px; width: fit-content;
+            display: none !important;
+            background-color: #e2e8f0; padding: 6px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; color: #4a5568; margin-bottom: 20px; align-items: center; gap: 8px; width: fit-content;
+        }
+        @media (max-width: 900px) {
+            .dashboard-header-brand {
+                padding-right: 0;
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            .dashboard-main-title { font-size: 1.55rem; }
         }
 
         .dashboard-footer-status {
@@ -195,20 +219,71 @@
         .loading-overlay.active { display: flex; }
         .spinner { width: 45px; height: 45px; border: 4px solid #edf2f7; border-top: 4px solid var(--accent-color); border-radius: 50%; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* CONTROLES DE VISTA Y EXPORTACIÓN */
+        body.sidebar-hidden .sidebar { transform: translateX(-100%); }
+        body.sidebar-hidden .main-content { margin-left: 0; }
+        .sidebar { transition: transform 0.25s ease; }
+        .main-content { transition: margin-left 0.25s ease; }
+        .sidebar-action-buttons { display: flex; flex-direction: column; gap: 8px; }
+        .sidebar-action-buttons .btn { box-shadow: 0 3px 10px rgba(0,0,0,0.08); }
+.sidebar-opener {
+            position: fixed;
+            top: 18px;
+            left: 14px;
+            z-index: 60;
+            display: none;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.15);
+        }
+        body.sidebar-hidden .sidebar-opener { display: inline-flex; }
+        .exporting-dashboard .sidebar,
+        .exporting-dashboard #chartFilterBadge,
+        .exporting-dashboard .sidebar-opener { display: none !important; }
+        .exporting-dashboard .main-content {
+            margin-left: 0 !important;
+            padding-left: 24px;
+            padding-right: 24px;
+            width: 100%;
+        }
+        .exporting-dashboard .grid-charts {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 18px;
+        }
+        .exporting-dashboard .chart-wrapper.chart-span-full {
+            grid-column: 1 / -1 !important;
+            height: 420px !important;
+        }
+        .executive-table-scroll.no-scroll {
+            overflow: visible;
+            max-height: none;
+        }
+        @media (max-width: 900px) {
+            .sidebar { transform: translateX(-100%); }
+            .main-content { margin-left: 0; padding: 20px 18px; }
+            body.sidebar-visible-mobile .sidebar { transform: translateX(0); }
+            body:not(.sidebar-visible-mobile) .sidebar-opener { display: inline-flex; }
+        }
     </style>
 </head>
 <body>
+
 
     <div class="loading-overlay" id="loading">
         <div class="spinner"></div>
         <p style="font-weight: 600; color: #4a5568;">Procesando matriz mensual interna...</p>
     </div>
 
+    <button class="btn btn-secondary sidebar-opener" id="sidebarOpener" onclick="toggleSidebar()">
+        <i class="fas fa-panel-left"></i> Mostrar panel
+    </button>
+
     <div class="sidebar">
         <img src="image_dbb586.png" alt="Logotipo u Operación" class="sidebar-top-img">
 
-        <div>
+        <div class="sidebar-action-buttons">
             <button class="btn btn-secondary" id="darkModeBtn" onclick="toggleDarkMode()"><i class="fas fa-moon"></i> Modo oscuro</button>
+            <button class="btn btn-secondary" id="toggleSidebarBtn" onclick="toggleSidebar()"><i class="fas fa-panel-left"></i> Ocultar panel</button>
+            <button class="btn btn-primary" id="export4kBtn" onclick="exportDashboard4K()"><i class="fas fa-image"></i> Exportar imagen 4K</button>
         </div>
 
         <h2><i class="fas fa-folder-open" style="color: #ffc107;"></i> Historial Mensual</h2>
@@ -231,6 +306,10 @@
         
         <div class="filter-group"><label>Fecha Inicio</label><input type="date" id="dateStart"></div>
         <div class="filter-group"><label>Fecha Fin</label><input type="date" id="dateEnd"></div>
+        <div class="filter-group">
+            <label>Semana</label>
+            <select id="filterWeek" onchange="applyFilters()"><option value="">Todas las semanas</option></select>
+        </div>
         <button class="btn btn-primary" onclick="applyFilters()" style="padding: 6px; font-size: 0.8rem; margin-bottom: 5px;"><i class="fas fa-calendar-check"></i> Aplicar Fechas</button>
         <button class="btn btn-secondary" onclick="clearAllFilters()" style="padding: 6px; font-size: 0.8rem; margin-bottom: 5px;">
             <i class="fas fa-filter-circle-xmark"></i> Limpiar filtros
@@ -248,6 +327,10 @@
     <div class="main-content">
         <!-- Leyenda en la esquina superior derecha -->
         <div style="position: absolute; top: 25px; right: 35px; font-size: 0.85rem; color: var(--text-muted); font-weight: 600; z-index: 5;">Designed by Pedro Estrada</div>
+
+        <div class="dashboard-header-brand">
+            <h1 class="dashboard-main-title">Dashboard Contact Center Express</h1>
+        </div>
 
         <div id="alertContainer"></div>
 
@@ -290,7 +373,7 @@
                     <div class="chart-container"><canvas id="resolutionPieChart"></canvas></div>
                 </div>
 
-                <div class="chart-wrapper" style="grid-column: span 2; height: 340px;">
+                <div class="chart-wrapper chart-span-full" style="grid-column: span 2; height: 340px;">
                     <h3><i class="fas fa-chart-line" style="color: #1f77b4;"></i> Comportamiento y Tendencia Temporal</h3>
                     <div class="chart-container"><canvas id="trendChart"></canvas></div>
                 </div>
@@ -327,7 +410,7 @@
                         <h3><i class="fas fa-clock" style="color: #ff7f0e;"></i> Resumen por horario (8:00 AM - 8:00 PM)</h3>
                         <span class="table-subtitle">Intervalos de una hora</span>
                     </div>
-                    <div class="executive-table-scroll">
+                    <div class="executive-table-scroll no-scroll">
                         <table id="hourlyExecutiveTable" class="executive-table">
                             <thead>
                                 <tr>
@@ -360,7 +443,7 @@
                     <h3><i class="fas fa-hourglass-half" style="color: #9467bd;"></i> Tiempos de Operación (AHT)</h3>
                     <div class="chart-container"><canvas id="durationDistributionChart"></canvas></div>
                 </div>
-                <div class="chart-wrapper" style="grid-column: span 2; height: 320px;">
+                <div class="chart-wrapper chart-span-full" style="grid-column: span 2; height: 320px;">
                     <h3><i class="fas fa-align-left" style="color: #17a2b8;"></i> Llamadas por Semana: Atendidas vs Abandonadas</h3>
                     <div class="chart-container"><canvas id="statusChart"></canvas></div>
                 </div>
@@ -544,6 +627,7 @@
             populateSelect('filterAgent', unique('agente'), "Todos los Agentes");
             populateSelect('filterQueue', unique('cola'), "Todas las Colas");
             populateSelect('filterStatus', unique('estado'), "Todos los Estados");
+            populateSelect('filterWeek', [...new Set(rawData.map(item => getWeekKey(item.fechaObj)))].sort(), "Todas las semanas");
 
             const dates = rawData.map(item => item.fechaObj.getTime());
             if (dates.length > 0) {
@@ -569,6 +653,7 @@
             const agent = document.getElementById('filterAgent').value;
             const queue = document.getElementById('filterQueue').value;
             const status = document.getElementById('filterStatus').value;
+            const week = document.getElementById('filterWeek').value;
 
             filteredData = rawData.filter(item => {
                 if (dStart && item.fechaObj < dStart) return false;
@@ -577,6 +662,7 @@
                 if (agent && item.agente !== agent) return false;
                 if (queue && item.cola !== queue) return false;
                 if (status && item.estado !== status) return false;
+                if (week && getWeekKey(item.fechaObj) !== week) return false;
 
                 if (graphFilters.cola && item.cola !== graphFilters.cola) return false;
                 if (graphFilters.agente && item.agente !== graphFilters.agente) return false;
@@ -611,6 +697,7 @@
             document.getElementById('filterAgent').value = '';
             document.getElementById('filterQueue').value = '';
             document.getElementById('filterStatus').value = '';
+            document.getElementById('filterWeek').value = '';
 
             const dates = rawData.map(item => item.fechaObj.getTime()).filter(Number.isFinite);
             if (dates.length > 0) {
@@ -775,6 +862,78 @@
             }
         };
         Chart.register(visibleDataLabelsPlugin);
+
+
+        function toggleSidebar() {
+            const isMobile = window.matchMedia('(max-width: 900px)').matches;
+            if (isMobile) {
+                document.body.classList.toggle('sidebar-visible-mobile');
+            } else {
+                document.body.classList.toggle('sidebar-hidden');
+            }
+            const hidden = isMobile
+                ? !document.body.classList.contains('sidebar-visible-mobile')
+                : document.body.classList.contains('sidebar-hidden');
+            const btn = document.getElementById('toggleSidebarBtn');
+            const opener = document.getElementById('sidebarOpener');
+            const label = hidden
+                ? '<i class="fas fa-panel-left"></i> Mostrar panel'
+                : '<i class="fas fa-panel-left"></i> Ocultar panel';
+            btn.innerHTML = label;
+            if (opener) opener.innerHTML = '<i class="fas fa-panel-left"></i> Mostrar panel';
+            setTimeout(() => Object.values(charts).forEach(chart => chart.resize()), 280);
+        }
+
+        async function exportDashboard4K() {
+            const button = document.getElementById('export4kBtn');
+            const wasSidebarHidden = document.body.classList.contains('sidebar-hidden');
+            const wasMobileSidebarVisible = document.body.classList.contains('sidebar-visible-mobile');
+            const target = document.querySelector('.main-content');
+            try {
+                button.disabled = true;
+                button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generando 4K...';
+                document.body.classList.add('sidebar-hidden', 'exporting-dashboard');
+                document.body.classList.remove('sidebar-visible-mobile');
+                Object.values(charts).forEach(chart => chart.resize());
+                await new Promise(resolve => setTimeout(resolve, 450));
+
+                const targetWidth = 3840;
+                const exportWidth = target.scrollWidth;
+                const exportHeight = target.scrollHeight;
+                const scale = Math.max(1, targetWidth / exportWidth);
+                const canvas = await html2canvas(target, {
+                    backgroundColor: getComputedStyle(document.body).getPropertyValue('--bg-primary').trim() || '#f4f6f9',
+                    scale,
+                    useCORS: true,
+                    allowTaint: true,
+                    logging: false,
+                    width: exportWidth,
+                    height: exportHeight,
+                    windowWidth: exportWidth,
+                    windowHeight: exportHeight,
+                    scrollX: 0,
+                    scrollY: 0
+                });
+
+                const now = new Date();
+                const stamp = now.toLocaleString('sv-SE').replace(/[ :]/g, '-');
+                const link = document.createElement('a');
+                link.download = `dashboard_${stamp}_4K.png`;
+                link.href = canvas.toDataURL('image/png', 1.0);
+                link.click();
+            } catch (error) {
+                console.error(error);
+                alert('No fue posible exportar la imagen. Revisa que los recursos del dashboard estén disponibles.');
+            } finally {
+                document.body.classList.remove('exporting-dashboard');
+                if (!wasSidebarHidden) document.body.classList.remove('sidebar-hidden');
+                if (wasMobileSidebarVisible) document.body.classList.add('sidebar-visible-mobile');
+                button.disabled = false;
+                button.innerHTML = '<i class="fas fa-image"></i> Exportar imagen 4K';
+                setTimeout(() => Object.values(charts).forEach(chart => chart.resize()), 280);
+                setTimeout(() => Object.values(charts).forEach(chart => chart.resize()), 100);
+            }
+        }
 
         function toggleDarkMode() {
             document.body.classList.toggle('dark-mode');
