@@ -391,6 +391,7 @@
                             <thead>
                                 <tr>
                                     <th>Mes</th>
+                                    <th>Agentes</th>
                                     <th>Recibidas</th>
                                     <th>Atendidas</th>
                                     <th>% Atención</th>
@@ -399,7 +400,7 @@
                                 </tr>
                             </thead>
                             <tbody id="monthlyExecutiveTableBody">
-                                <tr><td colspan="6" style="text-align:center; color:var(--text-muted);">Selecciona un periodo para consultar el resumen.</td></tr>
+                                <tr><td colspan="7" style="text-align:center; color:var(--text-muted);">Selecciona un periodo para consultar el resumen.</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -1197,6 +1198,21 @@
                 </tr>`;
         }
 
+        function buildMonthlyExecutiveRow(label, agents, received, answered, abandoned, isTotal = false) {
+            const pctAnswered = received > 0 ? ((answered / received) * 100).toFixed(1) : '0.0';
+            const pctAbandoned = received > 0 ? ((abandoned / received) * 100).toFixed(1) : '0.0';
+            return `
+                <tr class="${isTotal ? 'executive-total-row' : ''}">
+                    <td>${label}</td>
+                    <td>${agents.toLocaleString()}</td>
+                    <td>${received.toLocaleString()}</td>
+                    <td>${answered.toLocaleString()}</td>
+                    <td><span class="pct-pill pct-attended">${pctAnswered}%</span></td>
+                    <td>${abandoned.toLocaleString()}</td>
+                    <td><span class="pct-pill pct-abandoned">${pctAbandoned}%</span></td>
+                </tr>`;
+        }
+
         function renderExecutiveTables() {
             const monthlyBody = document.getElementById('monthlyExecutiveTableBody');
             const hourlyBody = document.getElementById('hourlyExecutiveTableBody');
@@ -1214,9 +1230,11 @@
                 const monthKey = `${year}-${String(month + 1).padStart(2, '0')}`;
 
                 if (!monthlyGroup[monthKey]) {
-                    monthlyGroup[monthKey] = { year, month, received: 0, answered: 0, abandoned: 0 };
+                    monthlyGroup[monthKey] = { year, month, received: 0, answered: 0, abandoned: 0, agents: new Set() };
                 }
                 monthlyGroup[monthKey].received++;
+                const agentName = (item.agente || '').toString().trim();
+                if (agentName && agentName !== 'N/A') monthlyGroup[monthKey].agents.add(agentName);
                 if (answered) monthlyGroup[monthKey].answered++;
                 else monthlyGroup[monthKey].abandoned++;
 
@@ -1231,21 +1249,23 @@
 
             const monthKeys = Object.keys(monthlyGroup).sort();
             if (monthKeys.length === 0) {
-                monthlyBody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:var(--text-muted);">Sin datos para el periodo seleccionado.</td></tr>';
+                monthlyBody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--text-muted);">Sin datos para el periodo seleccionado.</td></tr>';
             } else {
                 let monthlyHtml = '';
                 let totalReceived = 0, totalAnswered = 0, totalAbandoned = 0;
+                const totalAgents = new Set();
                 monthKeys.forEach(key => {
                     const item = monthlyGroup[key];
                     const label = new Intl.DateTimeFormat('es-MX', { month: 'long', year: 'numeric' })
                         .format(new Date(item.year, item.month, 1))
                         .replace(/^./, char => char.toUpperCase());
-                    monthlyHtml += buildExecutiveRow(label, item.received, item.answered, item.abandoned);
+                    monthlyHtml += buildMonthlyExecutiveRow(label, item.agents.size, item.received, item.answered, item.abandoned);
+                    item.agents.forEach(agent => totalAgents.add(agent));
                     totalReceived += item.received;
                     totalAnswered += item.answered;
                     totalAbandoned += item.abandoned;
                 });
-                monthlyHtml += buildExecutiveRow('Total del periodo', totalReceived, totalAnswered, totalAbandoned, true);
+                monthlyHtml += buildMonthlyExecutiveRow('Total del periodo', totalAgents.size, totalReceived, totalAnswered, totalAbandoned, true);
                 monthlyBody.innerHTML = monthlyHtml;
             }
 
