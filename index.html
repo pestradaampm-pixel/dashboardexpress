@@ -181,6 +181,12 @@
         .dashboard-view { display: none; }
         .grid-charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 20px; margin-bottom: 25px; }
         .chart-wrapper { background: #ffffff; padding: 18px; border-radius: 8px; border: 1px solid var(--border-color); height: 330px; display: flex; flex-direction: column; cursor: pointer; }
+        .queue-comparison-row { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 20px; --queue-chart-height: 400px; }
+        .queue-comparison-row > .chart-wrapper { min-width: 0; height: var(--queue-chart-height); }
+        .queue-comparison-row .chart-container { min-height: 0; }
+        @media (max-width: 700px) {
+            body:not(.exporting-dashboard) .queue-comparison-row { grid-template-columns: minmax(0, 1fr); }
+        }
         .chart-wrapper:hover { box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
         .chart-wrapper h3 { font-size: 0.9rem; color: #2d3748; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
         .chart-container { flex: 1; position: relative; width: 100%; height: 100%; overflow: hidden; }
@@ -368,9 +374,15 @@
                     <div class="chart-container"><canvas id="queueDistributionChart"></canvas></div>
                 </div>
 
-                <div class="chart-wrapper">
+                <div class="queue-comparison-row" id="queueComparisonRow">
+<div class="chart-wrapper" id="queueCallTypesWrapper">
+                    <h3><i class="fas fa-phone" style="color: #1f77b4;"></i> Tipos de Llamada por Cola</h3>
+                    <div class="chart-container"><canvas id="queueCallTypesChart"></canvas></div>
+                </div>
+<div class="chart-wrapper">
                     <h3><i class="fas fa-pie-chart" style="color: #4a5568;"></i> Proporción Global: Atendidas vs Abandonadas (%)</h3>
                     <div class="chart-container"><canvas id="resolutionPieChart"></canvas></div>
+                </div>
                 </div>
 
                 <div class="chart-wrapper chart-span-full" style="grid-column: span 2; height: 340px;">
@@ -486,10 +498,10 @@
         let graphFilters = { cola: null, agente: null, resolución: null, estado: null };
 
         const QUEUE_NAMES = {
-            "20020": "Atención personalizada",
-            "20021": "Rastreo de paquete",
+            "20020": "Atención Personalizada",
+            "20021": "Rastreo",
             "20022": "Recolecciones Amazon",
-            "20026": "Quejas o sugerencias",
+            "20026": "Quejas o Sugerencias",
             "20027": "Recolecciones"
         };
 
@@ -499,7 +511,7 @@
             tiempoEspera: ['tiempo espera', 'espera', 'wait_time'],
             agente: ['agente', 'agent', 'operador', 'user'],
             cola: ['cola', 'queue', 'skill'],
-            tipo: ['tipo', 'type', 'dirección'],
+            tipo: ['tipo', 'tipo de llamada', 'tipo llamada', 'type', 'call type', 'dirección', 'direccion'],
             estado: ['estado', 'status', 'resultado'],
             duracion: ['duración', 'duracion', 'duration', 'tiempo']
         };
@@ -1073,6 +1085,58 @@
                             } } }
                         },
                         onClick: (e, el) => handleChartClick(e, el, charts['queue'], 'cola') 
+                    }
+                });
+            }
+
+            // Tipos de llamada registrados en cada campaña, con los filtros activos.
+            const queueTypes = new Map();
+            const allTypes = new Set();
+            filteredData.forEach(d => {
+                const queue = getQueueName(d.cola);
+                const rawType = String(d.tipo || '').trim();
+                const type = !rawType || rawType.toUpperCase() === 'N/A'
+                    ? 'Sin tipo' : rawType.charAt(0).toUpperCase() + rawType.slice(1).toLowerCase();
+                if (!queueTypes.has(queue)) queueTypes.set(queue, new Map());
+                const counts = queueTypes.get(queue);
+                counts.set(type, (counts.get(type) || 0) + 1);
+                allTypes.add(type);
+            });
+            const queueTotal = queue => [...queueTypes.get(queue).values()].reduce((sum, count) => sum + count, 0);
+            const queueLabels = [...queueTypes.keys()].sort((a, b) => queueTotal(b) - queueTotal(a) || a.localeCompare(b, 'es'));
+            const typeLabels = [...allTypes].sort((a, b) => a.localeCompare(b, 'es'));
+            const typeColors = ['#1f77b4', '#2ca02c', '#ff7f0e', '#9467bd', '#e53e3e', '#17becf'];
+            const typeDatasets = typeLabels.map((type, i) => ({
+                label: type,
+                data: queueLabels.map(queue => queueTypes.get(queue).get(type) || 0),
+                backgroundColor: typeColors[i] || `hsl(${i * 137.5 % 360}, 60%, 45%)`,
+                maxBarThickness: 25
+            }));
+            document.getElementById('queueComparisonRow').style.setProperty('--queue-chart-height',
+                `${Math.max(400, queueLabels.length * (Math.max(typeLabels.length, 1) * 28 + 18) + 100)}px`);
+            if (charts['queueCallTypes']) {
+                charts['queueCallTypes'].data = { labels: queueLabels, datasets: typeDatasets };
+                charts['queueCallTypes'].resize();
+                charts['queueCallTypes'].update();
+            } else {
+                charts['queueCallTypes'] = new Chart(document.getElementById('queueCallTypesChart'), {
+                    type: 'bar',
+                    data: { labels: queueLabels, datasets: typeDatasets },
+                    options: {
+                        indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+                        layout: { padding: { right: 45 } },
+                        scales: {
+                            x: { beginAtZero: true, grace: '10%', ticks: { precision: 0 }, title: { display: true, text: 'Total de llamadas' } },
+                            y: { ticks: { autoSkip: false } }
+                        },
+                        plugins: {
+                            legend: { position: 'bottom' },
+                            tooltip: { callbacks: { label: ctx => {
+                                const total = ctx.chart.data.datasets.reduce((sum, dataset) => sum + dataset.data[ctx.dataIndex], 0);
+                                return ` ${ctx.dataset.label}: ${Number(ctx.raw).toLocaleString('es-MX')} (${total ? (ctx.raw / total * 100).toFixed(1) : '0.0'}% de la cola)`;
+                            } } }
+                        },
+                        onClick: (e, el) => handleChartClick(e, el, charts['queueCallTypes'], 'cola')
                     }
                 });
             }
