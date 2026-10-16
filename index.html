@@ -338,7 +338,7 @@
             <h1 class="dashboard-main-title">Dashboard Contact Center Express</h1>
         </div>
 
-        <div id="alertContainer"></div>
+        <div id="alertContainer" class="active-filter-badge" role="alert"></div>
 
         <div class="file-info-tag" id="fileInfo">
             <i class="fas fa-file-invoice"></i> <span id="fileInfoTxt">Esperando inicialización de datos en el panel izquierdo.</span>
@@ -549,6 +549,9 @@
         });
 
         function processSelectedMonths() {
+            const alertContainer = document.getElementById('alertContainer');
+            alertContainer.textContent = '';
+            alertContainer.classList.remove('show');
             const selectStart = document.getElementById('selectMonthStart');
             const selectEnd = document.getElementById('selectMonthEnd');
             const mesInicio = selectStart.value;
@@ -559,6 +562,8 @@
             const finIndex = MESES_ORDENADOS.indexOf(mesFin);
             if (inicioIndex > finIndex) {
                 document.getElementById('fileInfoTxt').innerText = 'El mes inicial no puede ser posterior al mes final.';
+                alertContainer.textContent = 'El mes inicial no puede ser posterior al mes final. Selecciona un rango válido para actualizar la información.';
+                alertContainer.classList.add('show');
                 return;
             }
 
@@ -572,7 +577,8 @@
                 mesesSeleccionados.forEach(mes => {
                     const csvData = window.MisMesesDisponibles[mes];
                     const results = Papa.parse(csvData.trim(), { header: true, skipEmptyLines: true });
-                    filasCombinadas.push(...results.data);
+                    // Evita exceder el límite de argumentos con archivos grandes.
+                    for (const fila of results.data) filasCombinadas.push(fila);
                 });
 
                 rawData = normalizeData(filasCombinadas);
@@ -586,6 +592,11 @@
                 document.getElementById('lblOrígen').innerText = `Origen: ${mesesSeleccionados.length} archivo(s) mensual(es)`;
                 document.getElementById('lblStatusLectura').innerText = 'Mapeo Offline Exitoso';
                 document.getElementById('fileInfoTxt').innerText = `${rawData.length} llamadas procesadas del rango ${rangoTexto} (8am - 8pm).`;
+            } catch (error) {
+                console.error('Error al procesar el rango mensual:', error);
+                document.getElementById('lblStatusLectura').innerText = 'Error al actualizar el rango';
+                alertContainer.textContent = 'No se pudo actualizar el rango seleccionado. La información visible puede corresponder a una carga anterior o incompleta. Revisa los archivos mensuales e intenta nuevamente.';
+                alertContainer.classList.add('show');
             } finally {
                 document.getElementById('loading').classList.remove('active');
             }
@@ -642,11 +653,23 @@
             populateSelect('filterStatus', unique('estado'), "Todos los Estados");
             populateSelect('filterWeek', [...new Set(rawData.map(item => getWeekKey(item.fechaObj)))].sort(), "Todas las semanas");
 
-            const dates = rawData.map(item => item.fechaObj.getTime());
-            if (dates.length > 0) {
-                document.getElementById('dateStart').value = new Date(Math.min(...dates)).toLocaleDateString('sv-SE'); 
-                document.getElementById('dateEnd').value = new Date(Math.max(...dates)).toLocaleDateString('sv-SE');
+            resetDateRange();
+        }
+
+        function resetDateRange() {
+            // Recorre los registros sin expandirlos como argumentos de Math.min/max.
+            let minDate = Infinity;
+            let maxDate = -Infinity;
+            for (const item of rawData) {
+                const timestamp = item.fechaObj.getTime();
+                if (!Number.isFinite(timestamp)) continue;
+                if (timestamp < minDate) minDate = timestamp;
+                if (timestamp > maxDate) maxDate = timestamp;
             }
+            document.getElementById('dateStart').value = Number.isFinite(minDate)
+                ? new Date(minDate).toLocaleDateString('sv-SE') : '';
+            document.getElementById('dateEnd').value = Number.isFinite(maxDate)
+                ? new Date(maxDate).toLocaleDateString('sv-SE') : '';
         }
 
         function populateSelect(id, list, defaultTxt) {
@@ -656,8 +679,6 @@
         }
 
         function applyFilters() {
-            if(rawData.length === 0) return;
-
             const startVal = document.getElementById('dateStart').value;
             const endVal = document.getElementById('dateEnd').value;
             const dStart = startVal ? new Date(startVal + 'T00:00:00') : null;
@@ -712,14 +733,7 @@
             document.getElementById('filterStatus').value = '';
             document.getElementById('filterWeek').value = '';
 
-            const dates = rawData.map(item => item.fechaObj.getTime()).filter(Number.isFinite);
-            if (dates.length > 0) {
-                document.getElementById('dateStart').value = new Date(Math.min(...dates)).toLocaleDateString('sv-SE');
-                document.getElementById('dateEnd').value = new Date(Math.max(...dates)).toLocaleDateString('sv-SE');
-            } else {
-                document.getElementById('dateStart').value = '';
-                document.getElementById('dateEnd').value = '';
-            }
+            resetDateRange();
 
             graphFilters = { cola: null, agente: null, resolución: null, estado: null };
             applyFilters();
